@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Avatar Meet - Real-time AI Interaction</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-left">
+            <h1 class="app-title">
+                <span class="material-icons">smart_toy</span>
+                AI Avatar Meet
+            </h1>
+        </div>
+        <div class="header-center">
+            <div class="meeting-info">
+                <span class="meeting-id">Meeting ID: <span id="meeting-id">Loading...</span></span>
+                <span class="connection-status" id="connection-status">Connecting...</span>
+            </div>
+        </div>
+        <div class="header-right">
+            <button class="icon-button" id="settings-btn" title="Settings">
+                <span class="material-icons">settings</span>
+            </button>
+            <button class="icon-button" id="info-btn" title="Meeting Info">
+                <span class="material-icons">info</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Video Grid -->
+        <div class="video-grid" id="video-grid">
+            <!-- User Video -->
+            <div class="video-container user-video">
+                <video id="user-video" autoplay muted playsinline></video>
+                <div class="video-overlay">
+                    <div class="participant-name">You</div>
+                    <div class="video-controls">
+                        <button class="control-btn" id="toggle-camera" title="Toggle Camera">
+                            <span class="material-icons">videocam</span>
+                        </button>
+                        <button class="control-btn" id="toggle-mic" title="Toggle Microphone">
+                            <span class="material-icons">mic</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="audio-visualizer" id="user-audio-visualizer">
+                    <div class="audio-bar"></div>
+                    <div class="audio-bar"></div>
+                    <div class="audio-bar"></div>
+                    <div class="audio-bar"></div>
+                    <div class="audio-bar"></div>
+                </div>
+            </div>
+
+            <!-- AI Avatar Video -->
+            <div class="video-container ai-video">
+                <video id="ai-video" autoplay playsinline></video>
+                <div class="video-overlay">
+                    <div class="participant-name">AI Avatar</div>
+                    <div class="ai-status" id="ai-status">
+                        <span class="status-indicator"></span>
+                        <span class="status-text">Ready</span>
+                    </div>
+                </div>
+                <div class="audio-visualizer" id="ai-audio-visualizer">
+                    <div class="audio-bar"></div>
+                    <div class="audio-bar"></div>
+                    <div class="audio-bar"></div>
+                    <div class="audio-bar"></div>
+                    <div class="audio-bar"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Panel -->
+        <div class="chat-panel" id="chat-panel">
+            <div class="chat-header">
+                <h3>Conversation</h3>
+                <button class="icon-button" id="clear-chat">
+                    <span class="material-icons">clear</span>
+                </button>
+            </div>
+            <div class="chat-messages" id="chat-messages">
+                <div class="message system-message">
+                    <span class="material-icons">info</span>
+                    AI Avatar is ready to chat! Start speaking or type a message.
+                </div>
+            </div>
+            <div class="chat-input-container">
+                <div class="chat-input">
+                    <input type="text" id="text-input" placeholder="Type a message..." maxlength="500">
+                    <button class="send-button" id="send-text">
+                        <span class="material-icons">send</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Control Bar -->
+    <div class="control-bar">
+        <div class="control-group left">
+            <button class="control-button" id="mic-button" title="Microphone">
+                <span class="material-icons">mic</span>
+            </button>
+            <button class="control-button" id="camera-button" title="Camera">
+                <span class="material-icons">videocam</span>
+            </button>
+        </div>
+
+        <div class="control-group center">
+            <button class="control-button record-button" id="record-button" title="Push to Talk">
+                <span class="material-icons">keyboard_voice</span>
+                <span class="button-text">Push to Talk</span>
+            </button>
+        </div>
+
+        <div class="control-group right">
+            <button class="control-button" id="chat-toggle" title="Toggle Chat">
+                <span class="material-icons">chat</span>
+            </button>
+            <button class="control-button" id="fullscreen-button" title="Fullscreen">
+                <span class="material-icons">fullscreen</span>
+            </button>
+            <button class="control-button leave-button" id="leave-button" title="Leave Meeting">
+                <span class="material-icons">call_end</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-spinner">
+            <div class="spinner"></div>
+            <div class="loading-text">Initializing AI Avatar...</div>
+            <div class="loading-steps" id="loading-steps">
+                <div class="step" data-step="whisper">Loading Speech Recognition...</div>
+                <div class="step" data-step="ollama">Loading Language Model...</div>
+                <div class="step" data-step="xtts">Loading Voice Synthesis...</div>
+                <div class="step" data-step="sadtalker">Loading Avatar Animation...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal" id="settings-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Settings</h2>
+                <button class="close-button" id="close-settings">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-section">
+                    <h3>Audio Settings</h3>
+                    <div class="setting-item">
+                        <label for="microphone-select">Microphone:</label>
+                        <select id="microphone-select"></select>
+                    </div>
+                    <div class="setting-item">
+                        <label for="speaker-select">Speaker:</label>
+                        <select id="speaker-select"></select>
+                    </div>
+                    <div class="setting-item">
+                        <label for="noise-cancellation">Noise Cancellation:</label>
+                        <input type="checkbox" id="noise-cancellation" checked>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Video Settings</h3>
+                    <div class="setting-item">
+                        <label for="camera-select">Camera:</label>
+                        <select id="camera-select"></select>
+                    </div>
+                    <div class="setting-item">
+                        <label for="video-quality">Video Quality:</label>
+                        <select id="video-quality">
+                            <option value="480p">480p</option>
+                            <option value="720p" selected>720p</option>
+                            <option value="1080p">1080p</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>AI Settings</h3>
+                    <div class="setting-item">
+                        <label for="ai-voice-speed">Voice Speed:</label>
+                        <input type="range" id="ai-voice-speed" min="0.5" max="2" step="0.1" value="1">
+                        <span class="range-value">1.0x</span>
+                    </div>
+                    <div class="setting-item">
+                        <label for="ai-response-length">Response Length:</label>
+                        <select id="ai-response-length">
+                            <option value="short">Short</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="long">Long</option>
+                        </select>
+                    </div>
+                    <div class="setting-item">
+                        <label for="auto-speech-detection">Auto Speech Detection:</label>
+                        <input type="checkbox" id="auto-speech-detection" checked>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="button secondary" id="reset-settings">Reset to Default</button>
+                <button class="button primary" id="save-settings">Save Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info Modal -->
+    <div class="modal" id="info-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Meeting Information</h2>
+                <button class="close-button" id="close-info">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="info-section">
+                    <h3>System Status</h3>
+                    <div class="status-grid" id="system-status">
+                        <div class="status-item">
+                            <span class="status-label">Speech Recognition:</span>
+                            <span class="status-value" data-service="whisper">Loading...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Language Model:</span>
+                            <span class="status-value" data-service="ollama">Loading...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Voice Synthesis:</span>
+                            <span class="status-value" data-service="xtts">Loading...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Avatar Animation:</span>
+                            <span class="status-value" data-service="sadtalker">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="info-section">
+                    <h3>Connection Info</h3>
+                    <div class="connection-info">
+                        <div class="info-item">
+                            <span class="info-label">Connection ID:</span>
+                            <span class="info-value" id="connection-id-display">Not connected</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">WebSocket Status:</span>
+                            <span class="info-value" id="websocket-status">Disconnected</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Latency:</span>
+                            <span class="info-value" id="latency-display">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="info-section">
+                    <h3>Features</h3>
+                    <ul class="feature-list">
+                        <li>✅ Real-time speech transcription</li>
+                        <li>✅ AI conversation with context</li>
+                        <li>✅ Voice cloning and synthesis</li>
+                        <li>✅ Live avatar animation</li>
+                        <li>✅ Local processing (no cloud)</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Scripts -->
+    <script src="js/utils.js"></script>
+    <script src="js/websocket.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/video.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html> 

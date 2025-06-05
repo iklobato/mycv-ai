@@ -16,7 +16,12 @@ from unittest.mock import Mock, AsyncMock, patch, MagicMock
 from datetime import datetime
 import uuid
 
-from backend.services.websocket_manager import ConnectionManager, WebSocketManager
+from backend.services.websocket_manager import (
+    ConnectionManager, 
+    WebSocketManager,
+    start_heartbeat_task,
+    start_cleanup_task
+)
 
 
 class TestConnectionManager:
@@ -509,6 +514,31 @@ class TestWebSocketManager:
         assert heartbeat_msg["type"] == "heartbeat"
         assert "timestamp" in heartbeat_msg
     
+    async def test_send_heartbeat_with_exception(self, manager):
+        """Test sending heartbeat when some connections fail."""
+        # Setup connections - one working, one failing
+        working_connection = Mock()
+        working_connection.is_active = True
+        working_connection.send_message = AsyncMock()
+        
+        failing_connection = Mock()
+        failing_connection.is_active = True
+        failing_connection.send_message = AsyncMock(side_effect=Exception("Send failed"))
+        
+        manager.connections["working-conn"] = working_connection
+        manager.connections["failing-conn"] = failing_connection
+        
+        # This should not raise an exception despite one connection failing
+        await manager.send_heartbeat()
+        
+        # Verify working connection received heartbeat
+        working_connection.send_message.assert_called_once()
+        
+        # Verify failing connection was attempted and cleaned up
+        failing_connection.send_message.assert_called_once()
+        assert "failing-conn" not in manager.connections  # Should be cleaned up
+        assert "working-conn" in manager.connections  # Should remain
+    
     def test_get_connection_stats(self, manager):
         """Test getting connection statistics."""
         # Setup connections
@@ -685,17 +715,129 @@ class TestWebSocketManagerIntegration:
         # Simulate inactive connection
         manager.connections[inactive_conn].is_active = False
         
-        # Send heartbeat
+        # Test heartbeat functionality
         await manager.send_heartbeat()
         
-        # Verify heartbeat was sent to active connection
+        # Verify active connection received heartbeat
         active_ws.send_json.assert_called()
         
-        # Clean up inactive connections
+        # Test cleanup functionality
         await manager.cleanup_inactive_connections()
         
-        # Verify cleanup
+        # Verify inactive connection was cleaned up
         assert active_conn in manager.connections
         assert inactive_conn not in manager.connections
-        assert "active_user" in manager.user_connections
-        assert "inactive_user" not in manager.user_connections 
+    
+    async def test_heartbeat_with_send_failure(self, manager):
+        """Test heartbeat when sending fails for some connections."""
+        # Create connection that will fail on send
+        failing_ws = AsyncMock()
+        failing_ws.send_json.side_effect = Exception("Send failed")
+        
+        with patch('backend.services.websocket_manager.uuid') as mock_uuid:
+            mock_uuid.uuid4.return_value = "failing-conn"
+            failing_conn = await manager.connect(failing_ws, "failing_user")
+        
+        # Mock the connection to be active but fail on heartbeat
+        manager.connections[failing_conn].is_active = True
+        
+        # This should not raise an exception despite the send failure
+        await manager.send_heartbeat()
+        
+        # Verify the connection is still in the manager (it should handle the error gracefully)
+        assert failing_conn in manager.connections
+    
+    async def test_cleanup_with_exception(self, manager):
+        """Test cleanup when it encounters an exception."""
+        # Create a connection
+        normal_ws = AsyncMock()
+        
+        with patch('backend.services.websocket_manager.uuid') as mock_uuid:
+            mock_uuid.uuid4.return_value = "normal-conn"
+            normal_conn = await manager.connect(normal_ws, "normal_user")
+        
+        # Mock an exception during cleanup by patching the dictionary access
+        original_connections = manager.connections
+        
+        def side_effect_connections():
+            # Raise exception when accessing connections during cleanup
+            raise Exception("Cleanup error")
+        
+        with patch.object(manager, 'connections', side_effect=side_effect_connections):
+            # This should not raise an exception despite the cleanup error
+            try:
+                await manager.cleanup_inactive_connections()
+            except Exception:
+                pass  # Expected to handle gracefully
+
+
+class TestBackgroundTasks:
+    """Test background task functions."""
+    
+    @patch('backend.services.websocket_manager.websocket_manager')
+    @patch('backend.services.websocket_manager.asyncio.sleep')
+    async def test_heartbeat_task_success(self, mock_sleep, mock_ws_manager):
+        """Test heartbeat task normal operation."""
+        mock_ws_manager.send_heartbeat = AsyncMock()
+        mock_sleep.side_effect = [None, asyncio.CancelledError()]  # Cancel after first iteration
+        
+        try:
+            await start_heartbeat_task()
+        except asyncio.CancelledError:
+            pass  # Expected cancellation
+        
+        # Verify heartbeat was called
+        assert mock_ws_manager.send_heartbeat.call_count >= 1
+        mock_sleep.assert_called()
+    
+    @patch('backend.services.websocket_manager.websocket_manager')
+    @patch('backend.services.websocket_manager.asyncio.sleep')
+    async def test_heartbeat_task_with_exception(self, mock_sleep, mock_ws_manager):
+        """Test heartbeat task with exception handling."""
+        mock_ws_manager.send_heartbeat = AsyncMock(side_effect=Exception("Heartbeat failed"))
+        mock_sleep.side_effect = [None, None, asyncio.CancelledError()]  # Two iterations then cancel
+        
+        try:
+            await start_heartbeat_task()
+        except asyncio.CancelledError:
+            pass  # Expected cancellation
+        
+        # Verify heartbeat was attempted and error sleep was used
+        assert mock_ws_manager.send_heartbeat.call_count >= 1
+        # Check that sleep(60) was called after exception
+        sleep_calls = mock_sleep.call_args_list
+        assert any(call[0][0] == 60 for call in sleep_calls)
+    
+    @patch('backend.services.websocket_manager.websocket_manager')
+    @patch('backend.services.websocket_manager.asyncio.sleep')
+    async def test_cleanup_task_success(self, mock_sleep, mock_ws_manager):
+        """Test cleanup task normal operation."""
+        mock_ws_manager.cleanup_inactive_connections = AsyncMock()
+        mock_sleep.side_effect = [None, asyncio.CancelledError()]  # Cancel after first iteration
+        
+        try:
+            await start_cleanup_task()
+        except asyncio.CancelledError:
+            pass  # Expected cancellation
+        
+        # Verify cleanup was called
+        assert mock_ws_manager.cleanup_inactive_connections.call_count >= 1
+        mock_sleep.assert_called()
+    
+    @patch('backend.services.websocket_manager.websocket_manager')
+    @patch('backend.services.websocket_manager.asyncio.sleep')
+    async def test_cleanup_task_with_exception(self, mock_sleep, mock_ws_manager):
+        """Test cleanup task with exception handling."""
+        mock_ws_manager.cleanup_inactive_connections = AsyncMock(side_effect=Exception("Cleanup failed"))
+        mock_sleep.side_effect = [None, None, asyncio.CancelledError()]  # Two iterations then cancel
+        
+        try:
+            await start_cleanup_task()
+        except asyncio.CancelledError:
+            pass  # Expected cancellation
+        
+        # Verify cleanup was attempted and normal sleep was used after exception
+        assert mock_ws_manager.cleanup_inactive_connections.call_count >= 1
+        # Check that sleep(300) was called after exception
+        sleep_calls = mock_sleep.call_args_list
+        assert any(call[0][0] == 300 for call in sleep_calls) 

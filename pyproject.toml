@@ -55,29 +55,35 @@ dev = [
 packages = ["backend"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-pythonpath = ["."]
+minversion = "6.0"
 addopts = [
     "--strict-markers",
     "--strict-config",
-    "--verbose",
     "--tb=short",
     "--cov=backend",
     "--cov-report=term-missing",
     "--cov-report=html:htmlcov",
-    "--asyncio-mode=auto",
-    "-ra",
+    "--cov-branch",
+    "--color=yes",
+    "--durations=10",
+    "--failed-first",
+    "--new-first",
+    "--maxfail=5",
+    "--disable-warnings"
 ]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
 markers = [
-    "unit: Unit tests",
-    "integration: Integration tests",
-    "slow: Slow tests",
-    "offline: Tests that run offline",
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+    "async: marks tests as async tests",
+    "offline: marks tests that run offline"
 ]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::PendingDeprecationWarning",
@@ -129,4 +135,5 @@ dev = [
     "pytest-asyncio>=1.0.0",
     "pytest-cov>=6.1.1",
     "pytest-mock>=3.14.1",
+    "pytest-sugar>=1.0.0",
 ]

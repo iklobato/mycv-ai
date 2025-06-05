@@ -50,11 +50,20 @@ class TestCVService:
     
     @pytest.mark.unit
     async def test_initialize_failure(self, cv_service):
-        with patch.object(cv_service, 'load_cv', side_effect=Exception("Test error")):
-            with pytest.raises(Exception, match="Test error"):
+        with patch.object(cv_service, 'load_cv', side_effect=Exception("Load failed")):
+            with pytest.raises(Exception, match="Load failed"):
                 await cv_service.initialize()
             
             assert cv_service.is_initialized is False
+    
+    @pytest.mark.unit
+    async def test_initialize_no_cv_content(self, cv_service):
+        """Test initialization when load_cv returns False (no CV content)."""
+        with patch.object(cv_service, 'load_cv', return_value=False):
+            result = await cv_service.initialize()
+            
+            assert result is False
+            assert cv_service.is_initialized is True  # Still initialized, just without CV
     
     @pytest.mark.unit
     async def test_load_cv_success(self, cv_service, sample_cv_content):
@@ -158,6 +167,20 @@ More content here."""
         cv_service._extract_basic_info()
         
         assert cv_service.default_name == original_name
+    
+    @pytest.mark.unit
+    def test_extract_basic_info_empty_lines_only(self, cv_service):
+        """Test _extract_basic_info with content that has no non-empty lines."""
+        cv_with_empty_lines = "\n\n   \n\t\n   \n"
+        cv_service.cv_content = cv_with_empty_lines
+        original_name = cv_service.default_name
+        original_title = cv_service.default_title
+        
+        cv_service._extract_basic_info()
+        
+        # Should not change defaults when there are no valid lines
+        assert cv_service.default_name == original_name
+        assert cv_service.default_title == original_title
     
     @pytest.mark.unit
     async def test_reload_cv(self, cv_service):

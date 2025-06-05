@@ -906,3 +906,86 @@ class TestTTSService:
             # Should handle exception and log error
             mock_logger.error.assert_called_with("Streaming synthesis failed: Sentence splitting failed")
             assert len(results) == 0  # No results due to exception 
+    
+    async def test_generate_cloned_speech_with_pitch_adjustment(self):
+        """Test voice cloning with pitch adjustment to cover line 284."""
+        request = TTSRequest(
+            text="Test speech",
+            voice_id="custom_voice",
+            speed=1.0,
+            pitch=1.5,  # This will trigger pitch adjustment (line 284)
+            sample_rate=22050
+        )
+        
+        # Mock service setup
+        self.service.is_initialized = True
+        self.service.device = "cpu"
+        
+        with patch('backend.services.tts_service.tempfile.NamedTemporaryFile') as mock_temp, \
+             patch('backend.services.tts_service.TTS') as mock_tts, \
+             patch.object(self.service, '_read_audio_file', return_value=b"audio_data"), \
+             patch.object(self.service, '_adjust_pitch', return_value=b"pitched_audio") as mock_adjust_pitch, \
+             patch('backend.services.tts_service.Path') as mock_path:
+            
+            # Setup temp file mock
+            mock_temp_instance = Mock()
+            mock_temp_instance.name = "/tmp/test.wav"
+            mock_temp.return_value.__enter__.return_value = mock_temp_instance
+            
+            # Setup TTS model mock
+            mock_tts_instance = Mock()
+            mock_tts.return_value = mock_tts_instance
+            self.service.tts_model = mock_tts_instance
+            self.service.voice_samples = {"custom_voice": "/path/to/sample.wav"}
+            
+            # Setup path mock
+            mock_path_instance = Mock()
+            mock_path.return_value = mock_path_instance
+            
+            result = await self.service._generate_cloned_speech(request, "Test speech")
+            
+            # Verify pitch adjustment was called (line 284)
+            mock_adjust_pitch.assert_called_once_with(b"audio_data", 22050, 1.5)
+            assert result == b"pitched_audio"
+
+    async def test_generate_standard_speech_single_language_model(self):
+        """Test standard speech generation with single language model to cover line 314."""
+        request = TTSRequest(
+            text="Test speech",
+            voice_id="default",
+            language="en",
+            speed=1.0,
+            pitch=1.0,
+            sample_rate=22050
+        )
+        
+        # Mock service setup
+        self.service.is_initialized = True
+        self.service.device = "cpu"
+        
+        with patch('backend.services.tts_service.tempfile.NamedTemporaryFile') as mock_temp, \
+             patch.object(self.service, '_read_audio_file', return_value=b"audio_data"), \
+             patch('backend.services.tts_service.Path') as mock_path:
+            
+            # Setup temp file mock
+            mock_temp_instance = Mock()
+            mock_temp_instance.name = "/tmp/test.wav"
+            mock_temp.return_value.__enter__.return_value = mock_temp_instance
+            
+            # Setup TTS model mock (single language model)
+            mock_tts_model = Mock()
+            mock_tts_model.is_multi_lingual = False  # This will trigger line 314
+            self.service.tts_model = mock_tts_model
+            
+            # Setup path mock
+            mock_path_instance = Mock()
+            mock_path.return_value = mock_path_instance
+            
+            result = await self.service._generate_standard_speech(request, "Test speech")
+            
+            # Verify single language model path was taken (line 314)
+            mock_tts_model.tts_to_file.assert_called_once_with(
+                text="Test speech",
+                file_path="/tmp/test.wav"
+            )
+            assert result == b"audio_data" 

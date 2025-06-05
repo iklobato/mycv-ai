@@ -473,4 +473,135 @@ class TestTranscriptionService:
         
         # The service actually raises an exception when not initialized
         with pytest.raises(RuntimeError, match="Transcription service not initialized"):
-            await self.service.detect_language(b"fake_audio") 
+            await self.service.detect_language(b"fake_audio")
+
+    async def test_load_openai_whisper_model_fallback(self):
+        """Test OpenAI Whisper model loading as fallback (line 55)."""
+        with patch('backend.services.transcription_service.WhisperModel', side_effect=Exception("Faster Whisper failed")), \
+             patch('backend.services.transcription_service.whisper.load_model') as mock_load, \
+             patch('backend.services.transcription_service.logger') as mock_logger, \
+             patch('backend.services.transcription_service.settings') as mock_settings:
+            
+            mock_settings.WHISPER_MODEL = "base"
+            mock_load.return_value = Mock()
+            
+            await self.service._load_faster_whisper_model()
+            
+            # Should fall back to OpenAI Whisper
+            mock_load.assert_called_once()
+            mock_logger.error.assert_called()
+            mock_logger.info.assert_called_with(f"Loaded OpenAI Whisper model: base")
+
+    async def test_transcribe_not_initialized(self):
+        """Test transcription when service not initialized."""
+        request = TranscriptionRequest(
+            audio_data=b"fake_audio",
+            language="en"
+        )
+        
+        self.service.is_initialized = False
+        
+        with pytest.raises(RuntimeError, match="Transcription service not initialized"):
+            await self.service.transcribe(request)
+
+    async def test_preprocess_audio_direct_loading_fallback(self):
+        """Test audio preprocessing with direct loading fallback."""
+        audio_data = b"fake_audio_data"
+        
+        # Mock librosa to fail, forcing fallback to soundfile
+        with patch('backend.services.transcription_service.tempfile.NamedTemporaryFile') as mock_temp, \
+             patch('backend.services.transcription_service.librosa.load', side_effect=Exception("Librosa failed")), \
+             patch('backend.services.transcription_service.sf.read') as mock_sf, \
+             patch('backend.services.transcription_service.logger'):
+            
+            # Mock soundfile to return stereo audio
+            mock_sf.return_value = (np.array([[0.1, 0.2], [0.3, 0.4]]), 22050)
+            
+            result = await self.service._preprocess_audio(audio_data)
+            
+            # Should convert stereo to mono
+            assert result.shape == (2,)  # Mean of stereo channels
+            mock_sf.assert_called_once()
+
+    async def test_preprocess_audio_complete_failure(self):
+        """Test audio preprocessing with complete failure."""
+        audio_data = b"fake_audio_data"
+        
+        # Mock all audio loading methods to fail
+        with patch('backend.services.transcription_service.tempfile.NamedTemporaryFile') as mock_temp, \
+             patch('backend.services.transcription_service.librosa.load', side_effect=Exception("Librosa failed")), \
+             patch('backend.services.transcription_service.sf.read', side_effect=Exception("Soundfile failed")), \
+             patch('backend.services.transcription_service.logger'):
+            
+            with pytest.raises(Exception, match="Librosa failed"):
+                await self.service._preprocess_audio(audio_data)
+
+    async def test_detect_language_not_initialized(self):
+        """Test language detection when service not initialized."""
+        audio_data = b"fake_audio"
+        
+        self.service.is_initialized = False
+        
+        with pytest.raises(RuntimeError, match="service not initialized"):
+            await self.service.detect_language(audio_data)
+
+    async def test_transcribe_with_auto_language(self):
+        """Test transcription with automatic language detection."""
+        request = TranscriptionRequest(
+            audio_data=b"fake_audio",
+            language="auto"
+        )
+        
+        self.service.is_initialized = True
+        self.service.model_type = "faster_whisper"
+        self.service.fast_model = Mock()
+        
+        # Mock the transcription result
+        mock_segment = Mock()
+        mock_segment.text = "Hello world"
+        mock_segment.end = 2.0
+        mock_segment.words = []
+        
+        mock_info = Mock()
+        mock_info.language = "en"
+        mock_info.language_probability = 0.95
+        
+        self.service.fast_model.transcribe.return_value = ([mock_segment], mock_info)
+        
+        with patch.object(self.service, '_preprocess_audio', return_value=np.array([0.1, 0.2, 0.3])):
+            result = await self.service.transcribe(request)
+            
+            assert result.success is True
+            assert result.text == "Hello world"
+            assert result.language == "en"
+
+    async def test_get_supported_languages(self):
+        """Test getting supported languages."""
+        languages = await self.service.get_supported_languages()
+        
+        # Should return the predefined list of languages
+        assert isinstance(languages, list)
+        assert len(languages) > 0
+        assert "en" in languages
+
+    async def test_transcribe_streaming_not_initialized(self):
+        """Test streaming transcription when not initialized."""
+        audio_chunks = [b"chunk1", b"chunk2"]
+        
+        self.service.is_initialized = False
+        
+        with pytest.raises(RuntimeError, match="service not initialized"):
+            async for _ in self.service.transcribe_streaming(audio_chunks):
+                pass
+
+    async def test_transcribe_streaming_empty_chunks(self):
+        """Test streaming transcription with empty chunks."""
+        audio_chunks = []
+        
+        self.service.is_initialized = True
+        
+        results = []
+        async for result in self.service.transcribe_streaming(audio_chunks):
+            results.append(result)
+        
+        assert len(results) == 0 

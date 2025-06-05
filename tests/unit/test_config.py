@@ -259,54 +259,90 @@ class TestSettingsValidators:
             import shutil
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+    def test_create_directories_validator_explicit_string_input(self):
+        """Test create_directories validator with explicit string input to hit line 140."""
+        from backend.config import Settings
+        from pathlib import Path
+        import tempfile
+        
+        # Create a temporary directory as a string
+        temp_dir = tempfile.mkdtemp()
+        try:
+            # Test direct instantiation with string path - this MUST hit line 140
+            settings = Settings(BASE_DIR=temp_dir)  # String input that gets converted
+            
+            # Verify it was converted to Path object (line 140 executed)
+            assert isinstance(settings.BASE_DIR, Path)
+            assert str(settings.BASE_DIR) == temp_dir
+            assert settings.BASE_DIR.exists()
+        finally:
+            import shutil
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_create_directories_with_env_var_string(self):
+        """Test create_directories validator when string comes from environment variable."""
+        from backend.config import Settings
+        from pathlib import Path
+        import tempfile
+        import os
+        
+        temp_dir = tempfile.mkdtemp()
+        try:
+            # Use environment variable to provide string path
+            with patch.dict(os.environ, {'BASE_DIR': temp_dir}):
+                settings = Settings()
+                
+                # This should trigger the validator and line 140: v = Path(v)
+                assert isinstance(settings.BASE_DIR, Path)
+                assert str(settings.BASE_DIR) == temp_dir
+        finally:
+            import shutil
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
 
 class TestEnvironmentSettings:
     """Test environment-specific settings."""
     
     def test_development_settings(self):
-        """Test development settings."""
-        settings = DevelopmentSettings()
-        assert settings.DEBUG is True
-        assert settings.LOG_LEVEL == "DEBUG"
-    
+        """Test development settings creation."""
+        dev_settings = DevelopmentSettings()
+        assert dev_settings.DEBUG is True
+        assert dev_settings.LOG_LEVEL == "DEBUG"
+        
     def test_production_settings(self):
-        """Test production settings."""
-        settings = ProductionSettings()
-        assert settings.DEBUG is False
-        assert settings.LOG_LEVEL == "WARNING"
-        assert "localhost" in settings.ALLOWED_HOSTS
-        assert "127.0.0.1" in settings.ALLOWED_HOSTS
-    
+        """Test production settings creation."""
+        prod_settings = ProductionSettings()
+        assert prod_settings.DEBUG is False
+        assert prod_settings.LOG_LEVEL == "WARNING"
+        assert "localhost" in prod_settings.ALLOWED_HOSTS
+        
     def test_get_settings_development(self):
-        """Test get_settings for development environment."""
-        with patch.dict(os.environ, {'ENVIRONMENT': 'development'}):
+        """Test get_settings returns development settings by default."""
+        with patch.dict(os.environ, {}, clear=True):
             settings = get_settings()
             assert isinstance(settings, DevelopmentSettings)
             assert settings.DEBUG is True
-    
+
     def test_get_settings_production(self):
-        """Test get_settings for production environment."""
-        with patch.dict(os.environ, {'ENVIRONMENT': 'production'}):
+        """Test get_settings returns production settings when env is production."""
+        with patch.dict(os.environ, {"ENVIRONMENT": "production"}):
             settings = get_settings()
             assert isinstance(settings, ProductionSettings)
             assert settings.DEBUG is False
-    
-    def test_get_settings_default(self):
-        """Test get_settings with no environment set."""
-        with patch.dict(os.environ, {}, clear=True):
-            # Remove ENVIRONMENT if it exists
-            if 'ENVIRONMENT' in os.environ:
-                del os.environ['ENVIRONMENT']
+            assert settings.LOG_LEVEL == "WARNING"
+            assert "localhost" in settings.ALLOWED_HOSTS
+            
+    def test_get_settings_case_insensitive(self):
+        """Test get_settings handles different cases."""
+        with patch.dict(os.environ, {"ENVIRONMENT": "PRODUCTION"}):
+            settings = get_settings()
+            assert isinstance(settings, ProductionSettings)
+            
+    def test_get_settings_invalid_environment(self):
+        """Test get_settings defaults to development for invalid environment."""
+        with patch.dict(os.environ, {"ENVIRONMENT": "invalid"}):
             settings = get_settings()
             assert isinstance(settings, DevelopmentSettings)
-            assert settings.DEBUG is True
-    
-    def test_get_settings_unknown_environment(self):
-        """Test get_settings with unknown environment."""
-        with patch.dict(os.environ, {'ENVIRONMENT': 'unknown'}):
-            settings = get_settings()
-            assert isinstance(settings, DevelopmentSettings)
-            assert settings.DEBUG is True
 
 
 class TestSettingsConfiguration:

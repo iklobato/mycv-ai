@@ -354,6 +354,96 @@ More content here."""
         assert cv_service.last_loaded is None
         assert cv_service.is_initialized is False
 
+    @pytest.mark.unit
+    def test_get_system_prompt_with_cv_and_instructions(self, cv_service):
+        """Test get_system_prompt with CV and custom instructions."""
+        cv_service.cv_content = "John Doe\nSenior Developer\nExperienced in Python."
+        cv_service.is_initialized = True
+        
+        custom_instructions = "Be professional and concise."
+        result = cv_service.get_system_prompt(custom_instructions)
+        
+        assert "John Doe" in result
+        assert "Senior Developer" in result
+        assert custom_instructions in result
+
+    @pytest.mark.unit
+    def test_get_cv_info_with_cv_content(self, cv_service):
+        """Test get_cv_info with CV content."""
+        cv_service.cv_content = "Jane Smith\nData Scientist\nSpecializes in machine learning and data analysis."
+        cv_service.is_initialized = True
+        
+        with patch('pathlib.Path.exists', return_value=True):
+            result = cv_service.get_cv_info()
+        
+        assert result["has_cv"] is True
+        assert result["default_name"] == "Jane Smith"
+        assert result["default_title"] == "Data Scientist"
+        assert "machine learning" in result["content_preview"]
+
+    @pytest.mark.unit
+    def test_get_cv_info_with_long_content(self, cv_service):
+        """Test get_cv_info with long CV content that gets truncated."""
+        # Create long content that will be truncated
+        long_content = "John Doe\nSenior Developer\n" + "A" * 350 + " This is a very long CV content that should be truncated in the preview."
+        cv_service.cv_content = long_content
+        cv_service.is_initialized = True
+        
+        with patch('pathlib.Path.exists', return_value=True):
+            result = cv_service.get_cv_info()
+        
+        assert result["has_cv"] is True
+        assert len(result["content_preview"]) <= 303  # Should be truncated with "..."
+        assert result["content_preview"].endswith("...")
+
+    @pytest.mark.unit
+    def test_get_cv_info_with_whitespace_only_content(self, cv_service):
+        """Test get_cv_info with content that contains only whitespace (covers line 129->134)."""
+        # Set content that has_cv() returns True for but results in empty lines after processing
+        cv_service.cv_content = "\n\n   \n  \t  \n\n"  # Only whitespace and newlines
+        cv_service.is_initialized = True
+        
+        with patch('pathlib.Path.exists', return_value=True):
+            result = cv_service.get_cv_info()
+        
+        # has_cv() should return False for whitespace-only content
+        # but if it somehow returns True, we want to test the lines processing
+        assert result["has_cv"] is False  # This should be False due to has_cv() logic
+        assert result["default_name"] == cv_service.default_name
+        assert result["default_title"] == cv_service.default_title
+
+    @pytest.mark.unit
+    def test_get_cv_info_branch_coverage_empty_lines(self, cv_service):
+        """Test get_cv_info to cover the branch where has_cv is True but lines is empty after processing."""
+        # Force has_cv to return True by setting non-empty content
+        cv_service.cv_content = "   "  # Non-empty but only spaces
+        cv_service.is_initialized = True
+        
+        # Mock has_cv to return True to force the branch execution
+        with patch.object(cv_service, 'has_cv', return_value=True), \
+             patch('pathlib.Path.exists', return_value=True):
+            
+            result = cv_service.get_cv_info()
+            
+            # This should hit the branch where has_cv() and cv_content are True
+            # but lines becomes empty after processing
+            assert result["has_cv"] is True  # Due to our mock
+            assert result["default_name"] == cv_service.default_name  # Should use defaults
+
+    @pytest.mark.unit 
+    def test_get_system_prompt_with_cv_available(self, cv_service):
+        """Test get_system_prompt when CV is available (covers line 93->exit path)."""
+        cv_service.cv_content = "Test User\nTest Title\nTest experience content."
+        cv_service.is_initialized = True
+        
+        result = cv_service.get_system_prompt()
+        
+        # Should follow the else path (has_cv() returns True)
+        assert "=== CV START ===" in result
+        assert "=== CV END ===" in result
+        assert cv_service.cv_content in result
+        assert "Test User" in result
+
 
 class TestCVServiceIntegration:
     """Integration tests for CV service with real file operations."""

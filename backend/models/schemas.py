@@ -372,50 +372,6 @@ def validate_image_data(image_data: bytes) -> bytes:
     return image_data
 
 
-class TranscriptionRequest(BaseModel):
-    """Request model for audio transcription."""
-    language: Optional[str] = Field("auto", description="Language code or 'auto' for detection")
-    prompt: Optional[str] = Field(None, description="Optional prompt to guide transcription")
-    temperature: Optional[float] = Field(0.0, ge=0.0, le=1.0, description="Sampling temperature")
-
-
-class TTSRequest(BaseModel):
-    """Request model for text-to-speech synthesis."""
-    text: str = Field(..., description="Text to synthesize")
-    voice_id: Optional[str] = Field("default", description="Voice ID to use")
-    speed: Optional[float] = Field(1.0, ge=0.5, le=2.0, description="Speech speed multiplier")
-    pitch: Optional[float] = Field(1.0, ge=0.5, le=2.0, description="Speech pitch multiplier")
-    emotion: Optional[str] = Field("neutral", description="Emotion for synthesis")
-
-
-class TTSResponse(BaseModel):
-    """Response model for text-to-speech synthesis."""
-    audio_url: str = Field(..., description="URL to the generated audio file")
-    duration: float = Field(..., description="Audio duration in seconds")
-    sample_rate: int = Field(..., description="Audio sample rate")
-    processing_time: float = Field(..., description="Processing time in seconds")
-    voice_used: str = Field(..., description="Voice ID used for synthesis")
-    audio_format: str = Field("wav", description="Audio file format")
-
-
-class AnimationRequest(BaseModel):
-    """Request model for avatar animation."""
-    use_default_avatar: bool = Field(True, description="Whether to use default avatar image")
-    animation_style: Optional[str] = Field("realistic", description="Animation style")
-    fps: Optional[int] = Field(25, ge=15, le=60, description="Frames per second")
-    quality: Optional[str] = Field("high", description="Output quality (low/medium/high)")
-
-
-class AnimationResponse(BaseModel):
-    """Response model for avatar animation."""
-    video_url: str = Field(..., description="URL to the generated video file")
-    duration: float = Field(..., description="Video duration in seconds")
-    fps: int = Field(..., description="Frames per second")
-    resolution: str = Field(..., description="Video resolution (e.g., '1920x1080')")
-    processing_time: float = Field(..., description="Processing time in seconds")
-    file_size: Optional[int] = Field(None, description="File size in bytes")
-
-
 class HealthCheckResponse(BaseModel):
     """Response model for health check."""
     status: str = Field(..., description="Overall health status")

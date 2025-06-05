@@ -15,7 +15,7 @@ import time
 import tempfile
 import os
 import io
-from typing import Optional, Dict, Any, AsyncIterable
+from typing import Optional, Dict, Any, AsyncIterable, List
 from pathlib import Path
 import uuid
 
@@ -519,11 +519,13 @@ class AnimationService:
             # Cleanup temp files
             await self._cleanup_temp_files()
             
-            self.is_initialized = False
             logger.info("Animation service cleaned up successfully")
             
         except Exception as e:
             logger.error(f"Error during animation service cleanup: {e}")
+        finally:
+            # Always set to False regardless of cleanup success/failure
+            self.is_initialized = False
     
     async def get_available_avatars(self) -> List[Dict[str, Any]]:
         """Get list of available avatar images."""

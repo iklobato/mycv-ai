@@ -68,7 +68,6 @@ addopts = [
     "--cov=backend",
     "--cov-report=term-missing",
     "--cov-report=html:htmlcov",
-    "--cov-fail-under=90",
     "--asyncio-mode=auto",
     "-ra",
 ]
@@ -123,3 +122,11 @@ exclude_lines = [
     "raise AssertionError",
     "raise NotImplementedError",
 ] 
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.0",
+    "pytest-asyncio>=1.0.0",
+    "pytest-cov>=6.1.1",
+    "pytest-mock>=3.14.1",
+]

@@ -15,7 +15,7 @@ import time
 import tempfile
 import os
 import io
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, AsyncIterable
 from pathlib import Path
 import uuid
 
@@ -595,6 +595,7 @@ class TTSService:
         
         try:
             return {
+                "initialized": self.is_initialized,
                 "model_name": settings.TTS_MODEL,
                 "device": self.device,
                 "is_multi_speaker": getattr(self.tts_model, 'is_multi_speaker', False),

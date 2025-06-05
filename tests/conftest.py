@@ -17,6 +17,15 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Add the tests directory to path for mock imports
+sys.path.insert(0, str(Path(__file__).parent))
+
+# Import and setup ML mocks BEFORE any other imports
+from mocks.ml_dependencies import setup_ml_mocks, cleanup_ml_mocks
+
+# Set up mocks immediately
+setup_ml_mocks()
+
 
 @pytest.fixture
 def sample_cv_content() -> str:
@@ -386,4 +395,13 @@ def large_conversation_history():
     for i in range(30):  # More than max allowed
         history.append({"role": "user", "content": f"Question {i}"})
         history.append({"role": "assistant", "content": f"Answer {i}"})
-    return history 
+    return history
+
+
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_environment():
+    """Set up the test environment for all tests."""
+    # Mocks are already set up above
+    yield
+    # Clean up after all tests
+    cleanup_ml_mocks() 

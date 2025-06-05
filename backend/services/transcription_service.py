@@ -13,7 +13,7 @@ import logging
 import time
 import tempfile
 import io
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, AsyncIterable
 from pathlib import Path
 
 import torch
@@ -140,6 +140,7 @@ class TranscriptionService:
                 language=result.get("language", request.language),
                 duration=result.get("duration", 0.0),
                 words=result.get("words"),
+                word_count=len(result["text"].split()) if result["text"].strip() else 0,
                 processing_time=processing_time
             )
             
@@ -154,6 +155,7 @@ class TranscriptionService:
                 text="",
                 confidence=0.0,
                 language=request.language,
+                word_count=0,
                 processing_time=processing_time,
                 success=False,
                 error_message=str(e)
@@ -399,6 +401,9 @@ class TranscriptionService:
         Returns:
             Detected language code
         """
+        if not self.is_initialized:
+            raise RuntimeError("Transcription service not initialized")
+            
         try:
             audio_array = await self._preprocess_audio(audio_data)
             
